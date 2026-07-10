@@ -79,9 +79,13 @@ def load_level(level_number):
     level = LEVELS[level_number]
     if "original_goal" not in level:
         level["original_goal"] = level["goal"].copy()
+        level["original_spikes"] = [spike.copy() for spike in level["spikes"]]
     else:
         level["goal"] = level["original_goal"].copy()
+        level["spikes"] = [spike.copy() for spike in level["original_spikes"]]
     level["goal_moved"] = False
+    level["goal_returned"] = False
+    level["moved_goal_position"] = None
     reset_player()
 
 
@@ -99,7 +103,22 @@ def move_goal_to_highest_platform(level):
     goal_rect = level["goal"]
     goal_rect.x = highest_platform.centerx - GOAL_WIDTH // 2
     goal_rect.y = highest_platform.top - GOAL_HEIGHT
+    level["moved_goal_position"] = goal_rect.copy()
     level["goal_moved"] = True
+
+
+def move_goal_back(level):
+    moved_pos = level.get("moved_goal_position")
+    if moved_pos is not None:
+        spike_rect = pygame.Rect(
+            moved_pos.centerx - SPIKE_SIZE // 2,
+            moved_pos.bottom - SPIKE_SIZE,
+            SPIKE_SIZE,
+            SPIKE_SIZE,
+        )
+        level["spikes"].append(spike_rect)
+    level["goal"] = level["original_goal"].copy()
+    level["goal_returned"] = True
 
 
 game_state = "menu"
@@ -199,13 +218,17 @@ while running:
 
         solid_objects = walls + platforms + obstacles
 
-        if CURRENT_LEVEL == 0 and not level.get("goal_moved", False):
+        if CURRENT_LEVEL == 0:
             distance_to_goal = math.hypot(
                 player.centerx - goal.centerx,
                 player.centery - goal.centery,
             )
-            if distance_to_goal < 150:
-                move_goal_to_highest_platform(level)
+            if not level.get("goal_moved", False):
+                if distance_to_goal < 280:
+                    move_goal_to_highest_platform(level)
+            elif not level.get("goal_returned", False):
+                if distance_to_goal < 150:
+                    move_goal_back(level)
 
         keys = pygame.key.get_pressed()
 
