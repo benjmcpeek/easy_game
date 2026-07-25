@@ -30,6 +30,10 @@ from player import create_player, reset_player
 from ui import draw_button, draw_instructions_popup, draw_multiline_text
 
 
+SPIKE_IMAGE = pygame.image.load("assets/spike.png")
+SPIKE_IMAGE = pygame.transform.scale(SPIKE_IMAGE, (SPIKE_SIZE, SPIKE_SIZE))
+
+
 def initialize_walls():
     return [
         pygame.Rect(0, 0, WORLD_WIDTH, WALL_THICKNESS),
@@ -43,13 +47,22 @@ def initialize_level(level):
     if "original_goal" not in level:
         level["original_goal"] = level["goal"].copy()
         level["original_spikes"] = [spike.copy() for spike in level["spikes"]]
+        level["original_platforms"] = [platform.copy() for platform in level.get("platforms", [])]
+        level["original_floor_removal_rect"] = (
+            level.get("floor_removal_rect").copy() if level.get("floor_removal_rect") else None
+        )
     else:
         level["goal"] = level["original_goal"].copy()
         level["spikes"] = [spike.copy() for spike in level["original_spikes"]]
+        level["platforms"] = [platform.copy() for platform in level["original_platforms"]]
+        level["floor_removal_rect"] = (
+            level["original_floor_removal_rect"].copy() if level["original_floor_removal_rect"] else None
+        )
 
     level["goal_moved"] = False
     level["goal_returned"] = False
     level["moved_goal_position"] = None
+    level["floor_removed"] = False
 
 
 def load_level(level_index, player):
@@ -60,27 +73,27 @@ def load_level(level_index, player):
     return level
 
 
-def move_goal_to_highest_platform(level):
-    highest_platform = min(level["platforms"], key=lambda p: p.top)
-    goal_rect = level["goal"]
-    goal_rect.x = highest_platform.centerx - GOAL_WIDTH // 2
-    goal_rect.y = highest_platform.top - GOAL_HEIGHT
-    level["moved_goal_position"] = goal_rect.copy()
-    level["goal_moved"] = True
+def update_first_level_floor(level, player):
+    if level.get("floor_removed", False):
+        return
 
+    floor_rect = level.get("floor_removal_rect")
+    if floor_rect is None:
+        return
 
-def move_goal_back(level):
-    moved_pos = level.get("moved_goal_position")
-    if moved_pos is not None:
-        spike_rect = pygame.Rect(
-            moved_pos.centerx - SPIKE_SIZE // 2,
-            moved_pos.bottom - SPIKE_SIZE,
-            SPIKE_SIZE,
-            SPIKE_SIZE,
-        )
-        level["spikes"].append(spike_rect)
-    level["goal"] = level["original_goal"].copy()
-    level["goal_returned"] = True
+    trigger_x = level.get("floor_remove_trigger_x", level["goal"].left - 120)
+    if player.centerx >= trigger_x:
+        level["platforms"] = [
+            platform
+            for platform in level["platforms"]
+            if not (
+                platform.x == floor_rect.x
+                and platform.y == floor_rect.y
+                and platform.width == floor_rect.width
+                and platform.height == floor_rect.height
+            )
+        ]
+        level["floor_removed"] = True
 
 
 def run_game():
@@ -177,14 +190,7 @@ def run_game():
             solid_objects = walls + level["platforms"] + level["obstacles"]
 
             if current_level == 0:
-                distance_to_goal = math.hypot(
-                    player.centerx - level["goal"].centerx,
-                    player.centery - level["goal"].centery,
-                )
-                if not level.get("goal_moved", False) and distance_to_goal < 280:
-                    move_goal_to_highest_platform(level)
-                elif level.get("goal_moved", False) and not level.get("goal_returned", False) and distance_to_goal < 150:
-                    move_goal_back(level)
+                update_first_level_floor(level, player)
 
             keys = pygame.key.get_pressed()
 
@@ -223,6 +229,7 @@ def run_game():
                     death_count += 1
                     velocity_y = 0
                     on_ground = False
+                    initialize_level(level)
                     reset_player(player, *level["spawn"])
                     break
 
@@ -251,7 +258,8 @@ def run_game():
             for obstacle in level["obstacles"]:
                 pygame.draw.rect(screen, WALL_COLOR, world_to_screen(obstacle, camera_x, camera_y))
             for spike in level["spikes"]:
-                pygame.draw.rect(screen, SPIKE_COLOR, world_to_screen(spike, camera_x, camera_y))
+                screen_pos = world_to_screen(spike, camera_x, camera_y)
+                screen.blit(SPIKE_IMAGE, screen_pos)
             pygame.draw.rect(screen, GOAL_COLOR, world_to_screen(level["goal"], camera_x, camera_y))
             pygame.draw.rect(screen, PLAYER_COLOR, world_to_screen(player, camera_x, camera_y))
 
