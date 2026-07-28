@@ -12,6 +12,7 @@ from settings import (
     GOAL_WIDTH,
     GRAVITY,
     HEIGHT,
+    JUMP_POWER,
     PLAYER_COLOR,
     PLAYER_SPEED,
     PLATFORM_COLOR,
@@ -32,6 +33,9 @@ from ui import draw_button, draw_instructions_popup, draw_multiline_text
 
 SPIKE_IMAGE = pygame.image.load("assets/spike.png")
 SPIKE_IMAGE = pygame.transform.scale(SPIKE_IMAGE, (SPIKE_SIZE, SPIKE_SIZE))
+
+SHOW_WHOLE_LEVEL = True
+OVERVIEW_SCALE = 0.65
 
 
 def initialize_walls():
@@ -94,6 +98,18 @@ def update_first_level_floor(level, player):
             )
         ]
         level["floor_removed"] = True
+
+
+def update_first_level_goal(level, player):
+
+    if level.get("goal_moved", False):
+        return
+
+    trigger_distance = level.get("goal_trigger_distance", 80)
+
+    if abs(player.centerx - level["goal"].centerx) <= trigger_distance:
+        level["goal"].topleft = level["goal_move_to"]
+        level["goal_moved"] = True
 
 
 def run_game():
@@ -191,6 +207,7 @@ def run_game():
 
             if current_level == 0:
                 update_first_level_floor(level, player)
+                update_first_level_goal(level, player)
 
             keys = pygame.key.get_pressed()
 
@@ -207,7 +224,7 @@ def run_game():
                         player.right = solid.left
 
             if keys[pygame.K_SPACE] and on_ground:
-                velocity_y = -17
+                velocity_y = JUMP_POWER
                 on_ground = False
 
             velocity_y += GRAVITY
@@ -240,28 +257,83 @@ def run_game():
                 else:
                     level = load_level(current_level, player)
 
-            camera_x = player.centerx - WIDTH // 2
-            camera_y = player.centery - HEIGHT // 2
-            camera_x, camera_y = clamp_camera(
-                camera_x,
-                camera_y,
-                WIDTH,
-                HEIGHT,
-                WORLD_WIDTH,
-                WORLD_HEIGHT,
-            )
+            if SHOW_WHOLE_LEVEL:
+                camera_x = 0
+                camera_y = 0
+            else:
+                camera_x = player.centerx - WIDTH // 2
+                camera_y = player.centery - HEIGHT // 2
+                camera_x, camera_y = clamp_camera(
+                    camera_x,
+                    camera_y,
+                    WIDTH,
+                    HEIGHT,
+                    WORLD_WIDTH,
+                    WORLD_HEIGHT,
+                )
 
-            for wall in walls:
-                pygame.draw.rect(screen, WALL_COLOR, world_to_screen(wall, camera_x, camera_y))
-            for platform in level["platforms"]:
-                pygame.draw.rect(screen, PLATFORM_COLOR, world_to_screen(platform, camera_x, camera_y))
-            for obstacle in level["obstacles"]:
-                pygame.draw.rect(screen, WALL_COLOR, world_to_screen(obstacle, camera_x, camera_y))
-            for spike in level["spikes"]:
-                screen_pos = world_to_screen(spike, camera_x, camera_y)
-                screen.blit(SPIKE_IMAGE, screen_pos)
-            pygame.draw.rect(screen, GOAL_COLOR, world_to_screen(level["goal"], camera_x, camera_y))
-            pygame.draw.rect(screen, PLAYER_COLOR, world_to_screen(player, camera_x, camera_y))
+            def draw_scaled_rect(color, rect):
+                screen_rect = world_to_screen(rect, camera_x, camera_y)
+                scaled_rect = pygame.Rect(
+                    int(screen_rect.x * OVERVIEW_SCALE),
+                    int(screen_rect.y * OVERVIEW_SCALE),
+                    max(1, int(screen_rect.width * OVERVIEW_SCALE)),
+                    max(1, int(screen_rect.height * OVERVIEW_SCALE)),
+                )
+                pygame.draw.rect(screen, color, scaled_rect)
+
+            if SHOW_WHOLE_LEVEL:
+                for wall in walls:
+                    draw_scaled_rect(WALL_COLOR, wall)
+                for platform in level["platforms"]:
+                    draw_scaled_rect(PLATFORM_COLOR, platform)
+                for obstacle in level["obstacles"]:
+                    draw_scaled_rect(WALL_COLOR, obstacle)
+                for spike in level["spikes"]:
+                    screen_pos = world_to_screen(spike, camera_x, camera_y)
+                    scaled_pos = (int(screen_pos.x * OVERVIEW_SCALE), int(screen_pos.y * OVERVIEW_SCALE))
+                    scaled_spike = pygame.transform.scale(
+                        SPIKE_IMAGE,
+                        (
+                            max(1, int(SPIKE_SIZE * OVERVIEW_SCALE)),
+                            max(1, int(SPIKE_SIZE * OVERVIEW_SCALE)),
+                        ),
+                    )
+                    screen.blit(scaled_spike, scaled_pos)
+                goal_rect = world_to_screen(level["goal"], camera_x, camera_y)
+                pygame.draw.rect(
+                    screen,
+                    GOAL_COLOR,
+                    pygame.Rect(
+                        int(goal_rect.x * OVERVIEW_SCALE),
+                        int(goal_rect.y * OVERVIEW_SCALE),
+                        max(1, int(goal_rect.width * OVERVIEW_SCALE)),
+                        max(1, int(goal_rect.height * OVERVIEW_SCALE)),
+                    ),
+                )
+                player_rect = world_to_screen(player, camera_x, camera_y)
+                pygame.draw.rect(
+                    screen,
+                    PLAYER_COLOR,
+                    pygame.Rect(
+                        int(player_rect.x * OVERVIEW_SCALE),
+                        int(player_rect.y * OVERVIEW_SCALE),
+                        max(1, int(player_rect.width * OVERVIEW_SCALE)),
+                        max(1, int(player_rect.height * OVERVIEW_SCALE)),
+                    ),
+                )
+            else:
+                for wall in walls:
+                    pygame.draw.rect(screen, WALL_COLOR, world_to_screen(wall, camera_x, camera_y))
+                for platform in level["platforms"]:
+                    pygame.draw.rect(screen, PLATFORM_COLOR, world_to_screen(platform, camera_x, camera_y))
+                for obstacle in level["obstacles"]:
+                    pygame.draw.rect(screen, WALL_COLOR, world_to_screen(obstacle, camera_x, camera_y))
+                for spike in level["spikes"]:
+                    screen_pos = world_to_screen(spike, camera_x, camera_y)
+                    screen.blit(SPIKE_IMAGE, screen_pos)
+                pygame.draw.rect(screen, GOAL_COLOR, world_to_screen(level["goal"], camera_x, camera_y))
+                pygame.draw.rect(screen, PLAYER_COLOR, world_to_screen(player, camera_x, camera_y))
 
             level_text = small_font.render(f"Level {current_level + 1}", True, BUTTON_TEXT_COLOR)
             death_text = small_font.render(f"Deaths: {death_count}", True, BUTTON_TEXT_COLOR)
