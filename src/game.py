@@ -14,6 +14,9 @@ from settings import (
     HEIGHT,
     JUMP_POWER,
     PLAYER_COLOR,
+    PLAYER_COLLISION_SIZE,
+    PLAYER_FRAME_SIZE,
+    PLAYER_DRAW_SIZE,
     PLAYER_SPEED,
     PLATFORM_COLOR,
     SPIKE_COLOR,
@@ -33,6 +36,51 @@ from ui import draw_button, draw_instructions_popup, draw_multiline_text
 
 SPIKE_IMAGE = pygame.image.load("assets/spike.png")
 SPIKE_IMAGE = pygame.transform.scale(SPIKE_IMAGE, (SPIKE_SIZE, SPIKE_SIZE))
+
+
+def load_player_animation_frames():
+    sprite_sheet = pygame.image.load(
+        "assets/player_walking.png"
+    ).convert_alpha()
+
+    frame_width = PLAYER_FRAME_SIZE
+    frame_height = PLAYER_FRAME_SIZE
+    frame_count = 16
+
+    frames = []
+
+    for frame_index in range(frame_count):
+        frame_surface = pygame.Surface(
+            (frame_width, frame_height),
+            pygame.SRCALPHA,
+        )
+
+        frame_surface.blit(
+            sprite_sheet,
+            (0, 0),
+            (
+                frame_index * frame_width,
+                0,
+                frame_width,
+                frame_height,
+            ),
+        )
+
+        frame_surface = pygame.transform.scale(
+            frame_surface,
+            (PLAYER_DRAW_SIZE, PLAYER_DRAW_SIZE),
+        )
+
+        frames.append(frame_surface)
+
+    right_frames = frames
+    left_frames = [
+        pygame.transform.flip(frame, True, False)
+        for frame in frames
+    ]
+
+    return right_frames, left_frames
+
 
 SHOW_WHOLE_LEVEL = True
 OVERVIEW_SCALE = 0.65
@@ -134,6 +182,11 @@ def run_game():
     game_state = "menu"
     previous_state = None
     running = True
+    player_walk_right, player_walk_left = load_player_animation_frames()
+    player_walk_frames = [player_walk_right, player_walk_left]
+    player_animation_frame = 0
+    player_animation_timer = 0
+    player_facing = 1
 
     while running:
         clock.tick(FPS)
@@ -211,10 +264,26 @@ def run_game():
 
             keys = pygame.key.get_pressed()
 
+            move_direction = 0
             if keys[pygame.K_LEFT]:
                 player.x -= PLAYER_SPEED
+                move_direction = -1
             if keys[pygame.K_RIGHT]:
                 player.x += PLAYER_SPEED
+                move_direction = 1
+
+            if move_direction != 0:
+                player_facing = move_direction
+                player_animation_timer += clock.get_time()
+                if player_animation_timer >= 80:
+                    player_animation_timer = 0
+                    player_animation_frame = (player_animation_frame + 1) % len(player_walk_frames[0])
+            else:
+                player_animation_frame = 0
+                player_animation_timer = 0
+
+            frame_set = player_walk_frames[0] if player_facing > 0 else player_walk_frames[1]
+            current_player_frame = frame_set[player_animation_frame] if move_direction != 0 else frame_set[0]
 
             for solid in solid_objects:
                 if player.colliderect(solid):
@@ -312,16 +381,17 @@ def run_game():
                     ),
                 )
                 player_rect = world_to_screen(player, camera_x, camera_y)
-                pygame.draw.rect(
-                    screen,
-                    PLAYER_COLOR,
-                    pygame.Rect(
-                        int(player_rect.x * OVERVIEW_SCALE),
-                        int(player_rect.y * OVERVIEW_SCALE),
-                        max(1, int(player_rect.width * OVERVIEW_SCALE)),
-                        max(1, int(player_rect.height * OVERVIEW_SCALE)),
-                    ),
+                scaled_player_rect = pygame.Rect(
+                    int(player_rect.x * OVERVIEW_SCALE),
+                    int(player_rect.y * OVERVIEW_SCALE),
+                    max(1, int(player_rect.width * OVERVIEW_SCALE)),
+                    max(1, int(player_rect.height * OVERVIEW_SCALE)),
                 )
+                scaled_player_sprite = pygame.transform.scale(
+                    current_player_frame,
+                    (scaled_player_rect.width, scaled_player_rect.height),
+                )
+                screen.blit(scaled_player_sprite, scaled_player_rect)
             else:
                 for wall in walls:
                     pygame.draw.rect(screen, WALL_COLOR, world_to_screen(wall, camera_x, camera_y))
@@ -333,7 +403,8 @@ def run_game():
                     screen_pos = world_to_screen(spike, camera_x, camera_y)
                     screen.blit(SPIKE_IMAGE, screen_pos)
                 pygame.draw.rect(screen, GOAL_COLOR, world_to_screen(level["goal"], camera_x, camera_y))
-                pygame.draw.rect(screen, PLAYER_COLOR, world_to_screen(player, camera_x, camera_y))
+                player_draw_rect = world_to_screen(player, camera_x, camera_y)
+                screen.blit(current_player_frame, player_draw_rect)
 
             level_text = small_font.render(f"Level {current_level + 1}", True, BUTTON_TEXT_COLOR)
             death_text = small_font.render(f"Deaths: {death_count}", True, BUTTON_TEXT_COLOR)

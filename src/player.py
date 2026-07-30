@@ -1,9 +1,14 @@
 import pygame
-from settings import PLAYER_SIZE
+from settings import PLAYER_COLLISION_SIZE
 
 
 def create_player():
-    return pygame.Rect(100, 850, PLAYER_SIZE, PLAYER_SIZE)
+    return pygame.Rect(
+        100,
+        850,
+        PLAYER_COLLISION_SIZE,
+        PLAYER_COLLISION_SIZE,
+    )
 
 
 def reset_player(player, spawn_x, spawn_y):

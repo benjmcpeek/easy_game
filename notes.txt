@@ -1,0 +1,23 @@
+
+Action Items: 
+
+1. Level Design 
+    - Make list of all obstacles in game 
+    - Consider removing all Walls 
+    - Add more events / challenges to each level 
+
+
+2. Sprite Design
+
+
+3. Audio Design 
+
+
+
+
+
+Game Obstacles: 
+- Spikes 
+- Platforms 
+- Walls 
+- Pits 
